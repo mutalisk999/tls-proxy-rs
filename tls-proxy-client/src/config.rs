@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::Read;
 
-const CONFIG_FILE_NAME: &'static str = "client.json";
+pub const CONFIG_FILE_NAME: &'static str = "client.json";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClientConfig {
