@@ -6,6 +6,8 @@ use std::net::SocketAddr;
 use tokio::net::TcpSocket;
 use std::error::Error;
 use config::{load_entire_file_content, ClientConfig};
+use log::{error, info};
+
 use crate::config::CONFIG_FILE_NAME;
 
 fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
@@ -26,7 +28,7 @@ async fn main() {
     // new socket and set reuse
     let socket_listen = TcpSocket::new_v4().unwrap();
     reuse_socket(&socket_listen)
-        .unwrap_or_else(|e| { panic!("reuse listen socket err: {}", e) });
+        .unwrap_or_else(|e| { panic!("set listen socket reuse option err: {}", e) });
 
     // bind
     socket_listen.bind(addr_listen)
@@ -38,6 +40,14 @@ async fn main() {
         .unwrap_or_else(|e| { panic!("socket start listening err: {}", e) });
 
     loop {
+        let r = listener.accept().await;
+        if r.is_err() {
+            error!("listener accept err: {}", r.unwrap_err());
+            continue;
+        }
+        let (mut tcp_stream, peer_addr) = r.unwrap();
+        info!("connection of peer from {}", peer_addr);
 
+        tokio::spawn(async move {});
     }
 }
