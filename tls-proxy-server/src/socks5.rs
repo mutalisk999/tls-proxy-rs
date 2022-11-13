@@ -1,19 +1,18 @@
 use std::error::Error;
 use std::ops::{Shl, Add, Index};
-// use hex;
 use serde_json::Value;
+// use hex;
 
 const PROTOCOL_VERSION: u8 = 0x05;
 
 pub fn get_methods_description(m: u8) -> &'static str {
     match m {
-        0x0 => "NO AUTHENTICATION REQUIRED",
+        0x00 => "NO AUTHENTICATION REQUIRED",
         0x01 => "GSSAPI",
         0x02 => "USERNAME/PASSWORD",
-        0xff => "NO ACCEPTABLE METHODS",
         0x03..=0x7f => "IANA ASSIGNED",
         0x80..=0xfe => "RESERVED FOR PRIVATE METHODS",
-        _ => ""
+        _ => "NO ACCEPTABLE METHODS", //0xff
     }
 }
 
@@ -46,7 +45,7 @@ pub fn parse_request_body(body: &Vec<u8>) -> Result<(u8, u8, String, u16), Box<d
     if body.index(1) != &0x01_u8 && body.index(1) != &0x02_u8 && body.index(1) != &0x03_u8 {
         return Err("invalid field CMD")?;
     }
-    if body.index(2) != &0x0_u8 {
+    if body.index(2) != &0x00_u8 {
         return Err("invalid field RSV")?;
     }
     if body.index(3) != &0x01_u8 && body.index(3) != &0x03_u8 && body.index(3) != &0x04_u8 {
@@ -106,5 +105,23 @@ pub fn parse_request_body(body: &Vec<u8>) -> Result<(u8, u8, String, u16), Box<d
 #[test]
 fn test_get_methods_description() {
     let m = get_methods_description(0x0);
-    println!("method: {:?}", m)
+    println!("method: {:?}", m);
+}
+
+#[test]
+fn test_parse_handshake_body() {
+    let v = vec![0x05_u8, 0x01_u8, 0x00_u8];
+    let r = parse_handshake_body(&v);
+    println!("result: {:?}", r);
+}
+
+#[test]
+fn test_parse_request_body() {
+    let v = vec![
+        0x05_u8, 0x01_u8, 0x00_u8, 0x01_u8,
+        0x7f_u8, 0x00_u8, 0x00_u8, 0x01_u8,
+        0x00_u8, 0x50_u8
+    ];
+    let r = parse_request_body(&v);
+    println!("result: {:?}", r);
 }
