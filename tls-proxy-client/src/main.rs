@@ -15,8 +15,8 @@ fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn process_peer_stream(peer_stream: TcpStream, config: &ClientConfig,
-                             tls_config: &ClientTlsConfig) {
+async fn process_peer_stream(peer_stream: TcpStream, config: ClientConfig,
+                             tls_config: ClientTlsConfig) {
     let tls_connector = tls_config
         .tls_connector(Uri::from_static("localhost"))
         .unwrap_or_else(|e| { panic!("tls_connector build err: {}", e) });
@@ -127,6 +127,10 @@ async fn main() {
         let (peer_stream, peer_addr) = r.unwrap();
         info!("connection of peer from {}", peer_addr);
 
-        process_peer_stream(peer_stream, &config, &tls_config).await;
+        let config_clone = config.clone();
+        let tls_config_clone = tls_config.clone();
+        tokio::spawn(async move {
+            process_peer_stream(peer_stream, config_clone, tls_config_clone).await;
+        });
     }
 }
