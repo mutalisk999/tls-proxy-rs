@@ -4,12 +4,10 @@ use std::net::SocketAddr;
 use tokio;
 use tokio::net::{TcpSocket, TcpStream};
 use std::error::Error;
-use config::{load_entire_file_content, ClientConfig};
+use config::{load_entire_file_content, ClientConfig, CONFIG_FILE_NAME};
 use tokio_tls_helper::{ClientTlsConfig, Certificate, Identity};
 use http::Uri;
 use log::{error, info};
-
-use crate::config::CONFIG_FILE_NAME;
 
 fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
     s.set_reuseaddr(true)?;
@@ -27,11 +25,33 @@ async fn process_peer_stream(peer_stream: TcpStream, config: &ClientConfig,
             .parse()
             .unwrap_or_else(|e| { panic!("parse server addr err: {}", e) });
 
-    let tcp_stream = TcpStream::connect(addr_conn)
-        .await.unwrap_or_else(|e| { panic!("tcp stream connect err: {}", e) });
+    // new socket and set reuse
+    let socket_connect = TcpSocket::new_v4().unwrap();
+    reuse_socket(&socket_connect)
+        .unwrap_or_else(|e| { panic!("set connect socket reuse option err: {}", e) });
 
-    let tls_stream = tls_connector.connect(tcp_stream)
-        .await.unwrap_or_else(|e| { panic!("tls stream connect err: {}", e) });
+    let connect_timeout = tokio::time::Duration::from_secs(5);
+    let r = tokio::time::timeout(
+        connect_timeout,
+        socket_connect.connect(addr_conn),
+    ).await;
+    if r.is_err() {
+        error!("tcp stream connect err: {}", r.unwrap_err());
+        return;
+    }
+    let r = r.unwrap();
+    if r.is_err() {
+        error!("tcp stream connect err: {}", r.unwrap_err());
+        return;
+    }
+    let tcp_stream = r.unwrap();
+
+    let r = tls_connector.connect(tcp_stream).await;
+    if r.is_err() {
+        error!("tls stream connect err: {}", r.unwrap_err());
+        return;
+    }
+    let tls_stream = r.unwrap();
 
     info!("client: tls conn established");
 
@@ -39,13 +59,17 @@ async fn process_peer_stream(peer_stream: TcpStream, config: &ClientConfig,
     let (mut tls_stream_reader, mut tls_stream_writer) = tokio::io::split(tls_stream);
 
     let fut1 = tokio::spawn(async move {
-        tokio::io::copy(&mut peer_stream_reader, &mut tls_stream_writer).await
-            .unwrap_or_else(|e| { panic!("copy [peer->tls] err: {}", e) });
+        let r = tokio::io::copy(&mut peer_stream_reader, &mut tls_stream_writer).await;
+        if r.is_err() {
+            error!("copy [peer->tls] err: {}", r.unwrap_err());
+        }
     });
 
     let fut2 = tokio::spawn(async move {
-        tokio::io::copy(&mut tls_stream_reader, &mut peer_stream_writer).await
-            .unwrap_or_else(|e| { panic!("copy [tls->peer] err: {}", e) });
+        let r = tokio::io::copy(&mut tls_stream_reader, &mut peer_stream_writer).await;
+        if r.is_err() {
+            error!("copy [tls->peer] err: {}", r.unwrap_err());
+        }
     });
 
     let (_, _) = tokio::join!(fut1, fut2);
