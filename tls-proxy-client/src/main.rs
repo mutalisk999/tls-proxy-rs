@@ -8,6 +8,7 @@ use config::{load_entire_file_content, ClientConfig, CONFIG_FILE_NAME};
 use tokio_tls_helper::{ClientTlsConfig, Certificate, Identity};
 use http::Uri;
 use log::{error, info};
+use fdlimit::raise_fd_limit;
 
 fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
     s.set_reuseaddr(true)?;
@@ -77,6 +78,13 @@ async fn process_peer_stream(peer_stream: TcpStream, config: &ClientConfig,
 
 #[tokio::main]
 async fn main() {
+    // raise fd limit to max
+    let r = raise_fd_limit();
+    if r.is_none() {
+        info!("not support to raise system fd limit");
+    }
+    info!("raise system fd limit to {}", r.unwrap());
+
     let json_str = load_entire_file_content(CONFIG_FILE_NAME);
     let config = ClientConfig::from_json_str(&json_str);
 

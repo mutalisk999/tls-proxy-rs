@@ -7,7 +7,7 @@ use tokio::net::{TcpSocket, TcpStream};
 use config::{load_entire_file_content, ServerConfig, CONFIG_FILE_NAME};
 use tokio_tls_helper::{ServerTlsConfig, Certificate, Identity};
 use log::{error, info};
-
+use fdlimit::raise_fd_limit;
 
 fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
     s.set_reuseaddr(true)?;
@@ -16,6 +16,13 @@ fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
 
 #[tokio::main]
 async fn main() {
+    // raise fd limit to max
+    let r = raise_fd_limit();
+    if r.is_none() {
+        info!("not support to raise system fd limit");
+    }
+    info!("raise system fd limit to {}", r.unwrap());
+
     let json_str = load_entire_file_content(CONFIG_FILE_NAME);
     let config = ServerConfig::from_json_str(&json_str);
 
