@@ -11,7 +11,15 @@ use fdlimit::raise_fd_limit;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use serde_json::Value;
 use socks5::{parse_handshake_body, parse_request_body};
+use flexi_logger::{Duplicate, detailed_format};
 
+fn init_log() {
+    flexi_logger::Logger::with_str("debug")
+        .duplicate_to_stdout(Duplicate::All)
+        .format_for_stdout(detailed_format)
+        .start()
+        .unwrap_or_else(|e| panic!("logger initialization failed, err: {}", e));
+}
 
 fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
     s.set_reuseaddr(true)?;
@@ -137,12 +145,15 @@ async fn process_peer_stream(peer_stream: TcpStream, tls_config: ServerTlsConfig
 
 #[tokio::main]
 async fn main() {
+    init_log();
+
     // raise fd limit to max
     let r = raise_fd_limit();
     if r.is_none() {
         info!("not support to raise system fd limit");
+    } else {
+        info!("raise system fd limit to {}", r.unwrap());
     }
-    info!("raise system fd limit to {}", r.unwrap());
 
     let json_str = load_entire_file_content(CONFIG_FILE_NAME);
     let config = ServerConfig::from_json_str(&json_str);
