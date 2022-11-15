@@ -1,22 +1,21 @@
-use std::error::Error;
 use std::ops::{Shl, Add, Index};
 use serde_json::Value;
 // use hex;
 
 const PROTOCOL_VERSION: u8 = 0x05;
 
-pub fn get_methods_description(m: u8) -> &'static str {
-    match m {
-        0x00 => "NO AUTHENTICATION REQUIRED",
-        0x01 => "GSSAPI",
-        0x02 => "USERNAME/PASSWORD",
-        0x03..=0x7f => "IANA ASSIGNED",
-        0x80..=0xfe => "RESERVED FOR PRIVATE METHODS",
-        _ => "NO ACCEPTABLE METHODS", //0xff
-    }
-}
+// pub fn get_methods_description(m: u8) -> &'static str {
+//     match m {
+//         0x00 => "NO AUTHENTICATION REQUIRED",
+//         0x01 => "GSSAPI",
+//         0x02 => "USERNAME/PASSWORD",
+//         0x03..=0x7f => "IANA ASSIGNED",
+//         0x80..=0xfe => "RESERVED FOR PRIVATE METHODS",
+//         _ => "NO ACCEPTABLE METHODS", //0xff
+//     }
+// }
 
-pub fn parse_handshake_body(body: &Vec<u8>) -> Result<bool, Box<dyn Error>> {
+pub fn parse_handshake_body(body: &Vec<u8>) -> Result<bool, &'static str> {
     if body.len() <= 2 {
         return Err("invalid handshake body length")?;
     }
@@ -35,7 +34,7 @@ pub fn parse_handshake_body(body: &Vec<u8>) -> Result<bool, Box<dyn Error>> {
     };
 }
 
-pub fn parse_request_body(body: &Vec<u8>) -> Result<(u8, u8, String, u16), Box<dyn Error>> {
+pub fn parse_request_body(body: &Vec<u8>) -> Result<(u8, u8, String, u16), &'static str> {
     if body.len() <= 4 {
         return Err("invalid handshake body length")?;
     }

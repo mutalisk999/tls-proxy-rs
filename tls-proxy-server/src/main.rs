@@ -5,22 +5,37 @@ use std::net::SocketAddr;
 use std::error::Error;
 use tokio::net::{TcpSocket, TcpStream};
 use config::{load_entire_file_content, ServerConfig, CONFIG_FILE_NAME};
-use tokio_tls_helper::{ServerTlsConfig, Certificate, Identity, TlsServerStream};
+use tokio_tls_helper::{ServerTlsConfig, Certificate, Identity};
 use log::{error, warn, info};
 use fdlimit::raise_fd_limit;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use serde_json::Value;
 use socks5::{parse_handshake_body, parse_request_body};
 
+
 fn reuse_socket(s: &TcpSocket) -> Result<(), Box<dyn Error>> {
     s.set_reuseaddr(true)?;
     Ok(())
 }
 
-async fn process_peer_stream(mut tls_peer_stream: TlsServerStream<TcpStream>, config: ServerConfig,
-                             tls_config: ServerTlsConfig) {
-    let mut buffer = [0_u8; 1024];
+async fn process_peer_stream(peer_stream: TcpStream, tls_config: ServerTlsConfig) {
+    // accept tls connection
+    let r = tls_config.tls_acceptor();
+    if r.is_err() {
+        error!("tls_acceptor build err: {}", r.unwrap_err());
+        return;
+    }
+    let tls_acceptor = r.unwrap();
 
+    let r = tls_acceptor.accept(peer_stream).await;
+    if r.is_err() {
+        error!("tls listener accept err: {}", r.unwrap_err());
+        return;
+    }
+    let mut tls_peer_stream = r.unwrap();
+    info!("accept tls connection of peer from {}", tls_peer_stream.get_ref().0.peer_addr().unwrap());
+
+    let mut buffer = [0_u8; 1024];
     // read handshake data
     let r = tls_peer_stream.read(&mut buffer).await;
     if r.is_err() {
@@ -143,10 +158,6 @@ async fn main() {
         .client_ca_root(ca_cert)
         .identity(server_identity);
 
-    let tls_acceptor = tls_config
-        .tls_acceptor()
-        .unwrap_or_else(|e| { panic!("tls_acceptor build err: {}", e) });
-
     let addr_listen: SocketAddr =
         format!("{}:{}", config.listen_host, config.listen_port)
             .parse()
@@ -172,20 +183,11 @@ async fn main() {
             error!("tcp listener accept err: {}", r.unwrap_err());
             continue;
         }
-        let (peer_stream, peer_addr) = r.unwrap();
+        let (peer_stream, _) = r.unwrap();
 
-        let r = tls_acceptor.accept(peer_stream).await;
-        if r.is_err() {
-            error!("tls listener accept err: {}", r.unwrap_err());
-            continue;
-        }
-        let tls_peer_stream = r.unwrap();
-        info!("accept tls connection of peer from {}", peer_addr);
-
-        let config_clone = config.clone();
         let tls_config_clone = tls_config.clone();
         tokio::spawn(async move {
-            process_peer_stream(tls_peer_stream, config_clone, tls_config_clone).await;
+            process_peer_stream(peer_stream, tls_config_clone).await;
         });
     }
 }
